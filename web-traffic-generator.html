@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Web Traffic Generator</title>
+<style>
+  :root {
+    --bg: #0a0c0f;
+    --surface: #111418;
+    --surface2: #181c22;
+    --border: #252b35;
+    --border2: #2e3745;
+    --accent: #00e5a0;
+    --accent2: #00b87a;
+    --accent-dim: rgba(0,229,160,0.08);
+    --accent-dim2: rgba(0,229,160,0.18);
+    --text: #c8d4e0;
+    --text-dim: #5a6a7e;
+    --text-bright: #eaf2ff;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+    --danger-dim: rgba(239,68,68,0.12);
+    --running: #22d3ee;
+    --running-dim: rgba(34,211,238,0.1);
+    --radius: 6px;
+    --mono: 'Courier New', 'Lucida Console', monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.5;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-shrink: 0;
+  }
+  .logo { font-size: 15px; font-weight: bold; color: var(--accent); letter-spacing: 0.08em; white-space: nowrap; }
+  .logo span { color: var(--text-dim); font-weight: normal; }
+
+  .status-pill {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px;
+    letter-spacing: 0.06em; font-weight: bold;
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text-dim);
+    transition: all 0.3s;
+  }
+  .status-pill.running { background: var(--running-dim); border-color: var(--running); color: var(--running); }
+  .status-pill.running .dot { background: var(--running); animation: blink 1s infinite; }
+  .status-pill.stopped .dot { background: var(--text-dim); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .header-stats { margin-left: auto; display: flex; gap: 20px; }
+  .stat { text-align: right; }
+  .stat-label { font-size: 10px; color: var(--text-dim); letter-spacing: 0.08em; }
+  .stat-value { font-size: 14px; color: var(--text-bright); }
+  .stat-value.accent { color: var(--accent); }
+
+  main { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+
+  aside {
+    width: 300px; flex-shrink: 0;
+    background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .section { border-bottom: 1px solid var(--border); padding: 12px 16px; }
+  .section-title { font-size: 10px; letter-spacing: 0.12em; color: var(--text-dim); margin-bottom: 10px; }
+
+  textarea {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius); color: var(--text); font-family: var(--mono);
+    font-size: 12px; padding: 8px 10px; resize: vertical; min-height: 110px;
+    outline: none; transition: border-color 0.2s;
+  }
+  textarea:focus { border-color: var(--accent2); }
+  textarea::placeholder { color: var(--text-dim); }
+
+  .drop-zone {
+    border: 1px dashed var(--border2); border-radius: var(--radius); padding: 9px;
+    text-align: center; color: var(--text-dim); font-size: 11px; cursor: pointer;
+    transition: all 0.2s; margin-bottom: 8px; display: block;
+  }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+  .drop-zone input[type="file"] { display: none; }
+
+  label { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
+  .row { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 10px; }
+  .field { flex: 1; }
+
+  input[type="number"], select {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius); color: var(--text); font-family: var(--mono);
+    font-size: 12px; padding: 6px 8px; outline: none; transition: border-color 0.2s;
+  }
+  input:focus, select:focus { border-color: var(--accent2); }
+  select option { background: var(--surface2); }
+
+  .checkbox-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; cursor: pointer; }
+  .checkbox-row input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
+  .checkbox-row span { font-size: 12px; color: var(--text); }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 8px 16px; border-radius: var(--radius); border: 1px solid transparent;
+    font-family: var(--mono); font-size: 12px; font-weight: bold; letter-spacing: 0.06em;
+    cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  }
+  .btn-start { background: var(--accent); color: #000; border-color: var(--accent); width: 100%; font-size: 13px; padding: 10px; }
+  .btn-start:hover { background: #00ffb3; }
+  .btn-stop { background: var(--danger-dim); color: var(--danger); border-color: var(--danger); width: 100%; font-size: 13px; padding: 10px; display: none; }
+  .btn-stop:hover { background: rgba(239,68,68,0.2); }
+  .btn-sm { background: var(--surface2); color: var(--text-dim); border-color: var(--border); padding: 5px 10px; font-size: 11px; }
+  .btn-sm:hover { color: var(--text); border-color: var(--border2); }
+
+  .site-list-wrap { flex: 1; overflow-y: auto; padding: 8px 16px 12px; }
+  .site-list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .site-list-title { font-size: 10px; letter-spacing: 0.1em; color: var(--text-dim); }
+  .site-count { font-size: 11px; color: var(--accent); background: var(--accent-dim); padding: 2px 7px; border-radius: 10px; }
+
+  .site-item {
+    display: flex; align-items: center; gap: 8px; padding: 4px 8px;
+    border-radius: 4px; font-size: 11px; color: var(--text-dim);
+    transition: all 0.15s; border: 1px solid transparent;
+  }
+  .site-item.active { background: var(--accent-dim2); border-color: rgba(0,229,160,0.25); color: var(--accent); }
+  .site-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border2); flex-shrink: 0; }
+  .site-item.active .site-dot { background: var(--accent); }
+  .site-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .site-frame { font-size: 10px; padding: 1px 5px; border-radius: 3px; background: var(--surface2); color: var(--text-dim); flex-shrink: 0; }
+  .site-item.active .site-frame { background: var(--accent-dim); color: var(--accent); }
+
+  .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+  .frame-grid {
+    display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
+    gap: 3px; flex: 1; background: #070809; overflow: hidden; padding: 3px;
+  }
+
+  .frame-cell {
+    position: relative; background: var(--surface);
+    overflow: hidden; display: flex; flex-direction: column;
+    border-radius: 4px; border: 1px solid var(--border);
+    transition: border-color 0.4s;
+  }
+  .frame-cell.active-cell { border-color: var(--accent); }
+
+  .frame-bar {
+    display: flex; align-items: center; gap: 8px; padding: 5px 10px;
+    background: var(--surface2); border-bottom: 1px solid var(--border);
+    flex-shrink: 0; min-height: 28px; z-index: 2;
+  }
+  .frame-id { font-size: 10px; font-weight: bold; color: var(--accent); letter-spacing: 0.08em; flex-shrink: 0; }
+  .frame-url { font-size: 10px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+
+  .method-badge {
+    font-size: 9px; font-weight: bold; letter-spacing: 0.05em;
+    padding: 2px 5px; border-radius: 3px; flex-shrink: 0;
+  }
+  .method-badge.fetch { background: rgba(34,211,238,0.15); color: var(--running); border: 1px solid rgba(34,211,238,0.3); }
+  .method-badge.iframe-ok { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(0,229,160,0.3); }
+  .method-badge.blocked { background: rgba(239,68,68,0.1); color: #f87171; border: 1px solid rgba(239,68,68,0.25); }
+
+  .frame-status { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim); flex-shrink: 0; transition: background 0.3s; }
+  .frame-status.loading { background: var(--warn); animation: blink 0.6s infinite; }
+  .frame-status.ok { background: var(--accent); }
+  .frame-status.err { background: var(--danger); }
+
+  iframe { width: 100%; flex: 1; border: none; background: #fff; display: block; }
+
+  .status-card {
+    position: absolute; top: 28px; left: 0; right: 0; bottom: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; background: var(--surface); z-index: 3;
+    padding: 20px; transition: opacity 0.25s; pointer-events: none;
+  }
+  .status-card.hidden { opacity: 0; }
+
+  .sc-favicon {
+    width: 52px; height: 52px; border-radius: 12px;
+    background: var(--surface2); border: 1px solid var(--border2);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; flex-shrink: 0;
+  }
+  .sc-favicon img { width: 32px; height: 32px; object-fit: contain; }
+  .sc-letter { font-size: 24px; color: var(--accent); font-weight: bold; }
+
+  .sc-domain { font-size: 13px; color: var(--text-bright); text-align: center; font-weight: bold; word-break: break-all; }
+  .sc-url { font-size: 10px; color: var(--text-dim); text-align: center; word-break: break-all; max-width: 200px; }
+
+  .sc-badge {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; letter-spacing: 0.05em;
+  }
+  .sc-badge.sent { background: rgba(34,211,238,0.1); color: var(--running); border: 1px solid rgba(34,211,238,0.3); }
+  .sc-badge.sending { background: rgba(245,158,11,0.1); color: var(--warn); border: 1px solid rgba(245,158,11,0.3); animation: blink 0.8s infinite; }
+  .sc-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+
+  .sc-meta { font-size: 10px; color: var(--text-dim); text-align: center; }
+
+  .idle-overlay {
+    position: absolute; top: 28px; left: 0; right: 0; bottom: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 8px; background: var(--surface); color: var(--text-dim); font-size: 11px;
+    z-index: 4; transition: opacity 0.3s;
+  }
+  .idle-overlay.hidden { opacity: 0; pointer-events: none; }
+  .idle-icon { font-size: 28px; opacity: 0.2; }
+
+  .log-panel { height: 120px; border-top: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; flex-shrink: 0; }
+  .log-header { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .log-title { font-size: 10px; letter-spacing: 0.1em; color: var(--text-dim); }
+  .log-clear { margin-left: auto; font-size: 10px; color: var(--text-dim); cursor: pointer; }
+  .log-clear:hover { color: var(--text); }
+  .log-body { flex: 1; overflow-y: auto; padding: 6px 12px; font-size: 11px; line-height: 1.6; }
+  .log-entry { display: flex; gap: 10px; }
+  .log-time { color: var(--text-dim); flex-shrink: 0; }
+  .log-msg.info { color: var(--text); }
+  .log-msg.ok { color: var(--accent); }
+  .log-msg.warn { color: var(--warn); }
+  .log-msg.err { color: var(--danger); }
+  .log-msg.fetch { color: var(--running); }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+
+  .timer-display { font-size: 22px; letter-spacing: 0.1em; color: var(--text-bright); text-align: center; padding: 6px 0; font-variant-numeric: tabular-nums; }
+  .timer-display.running { color: var(--running); }
+  .timer-sub { font-size: 10px; color: var(--text-dim); text-align: center; letter-spacing: 0.1em; margin-top: 2px; }
+
+  .progress-wrap { background: var(--bg); border-radius: 4px; height: 4px; overflow: hidden; margin: 8px 0; }
+  .progress-bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.5s linear; border-radius: 4px; }
+
+  .mode-toggle { display: flex; gap: 4px; margin-bottom: 10px; }
+  .mode-btn {
+    flex: 1; padding: 5px 4px; border-radius: 4px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text-dim); font-family: var(--mono);
+    font-size: 10px; cursor: pointer; text-align: center; transition: all 0.15s;
+    letter-spacing: 0.03em; font-weight: bold;
+  }
+  .mode-btn:hover { color: var(--text); border-color: var(--border2); }
+  .mode-btn.active { border-color: var(--accent); background: var(--accent-dim2); color: var(--accent); }
+
+  .info-box {
+    font-size: 10px; color: var(--text-dim); background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 7px 9px; line-height: 1.75; margin-top: 4px;
+  }
+  .info-box b { color: var(--accent); }
+  .info-box code { color: var(--running); font-family: var(--mono); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">WTG<span>//</span>traffic<span>.</span>gen</div>
+  <div class="status-pill stopped" id="statusPill">
+    <div class="dot"></div>
+    <span id="statusText">STOPPED</span>
+  </div>
+  <div class="header-stats">
+    <div class="stat">
+      <div class="stat-label">REQUESTS</div>
+      <div class="stat-value accent" id="statRequests">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">FETCH OK</div>
+      <div class="stat-value" id="statFetch">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">IFRAME OK</div>
+      <div class="stat-value" id="statIframe">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">SITES</div>
+      <div class="stat-value" id="statSites">0</div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <aside>
+    <div class="section">
+      <div class="section-title">▸ SITE LIST</div>
+      <label class="drop-zone" id="dropZone">
+        ↑ Drop .txt file or click to browse
+        <input type="file" id="fileInput" accept=".txt,text/plain">
+      </label>
+      <textarea id="siteList" placeholder="https://www.google.com&#10;https://www.youtube.com&#10;https://www.github.com&#10;..."></textarea>
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <button class="btn btn-sm" onclick="parseSites()">↻ Parse</button>
+        <button class="btn btn-sm" onclick="clearSites()">✕ Clear</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">▸ TRAFFIC MODE</div>
+      <div class="mode-toggle">
+        <div class="mode-btn active" id="modeA" onclick="setMode('fetch+iframe')">FETCH+IFRAME</div>
+        <div class="mode-btn" id="modeB" onclick="setMode('fetch')">FETCH ONLY</div>
+        <div class="mode-btn" id="modeC" onclick="setMode('iframe')">IFRAME ONLY</div>
+      </div>
+      <div class="info-box" id="modeInfo">
+        <b>FETCH + IFRAME</b> — Fires a real HTTP GET via <code>fetch(no-cors)</code> for every site (firewall sees it), and also tries to load it in an iframe. Blocked iframes show a status card; fetch always goes through.
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">▸ TIMING</div>
+      <div class="row">
+        <div class="field">
+          <label>Interval (sec)</label>
+          <input type="number" id="interval" value="8" min="2" max="300">
+        </div>
+        <div class="field">
+          <label>Order</label>
+          <select id="shuffleMode">
+            <option value="seq">Sequential</option>
+            <option value="rand">Random</option>
+          </select>
+        </div>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="limitTime">
+        <span>Limit run time</span>
+      </div>
+      <div id="timeRow" style="display:none;">
+        <div class="row">
+          <div class="field">
+            <label>Hours</label>
+            <input type="number" id="runHours" value="0" min="0" max="72">
+          </div>
+          <div class="field">
+            <label>Minutes</label>
+            <input type="number" id="runMinutes" value="30" min="0" max="59">
+          </div>
+        </div>
+      </div>
+      <div class="timer-display" id="timerDisplay">—:——:——</div>
+      <div class="timer-sub" id="timerSub">NOT RUNNING</div>
+      <div class="progress-wrap" id="progressWrap" style="display:none">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <button class="btn btn-start" id="btnStart" onclick="startTraffic()">▶ START</button>
+      <button class="btn btn-stop" id="btnStop" onclick="stopTraffic()">■ STOP</button>
+    </div>
+
+    <div class="site-list-wrap">
+      <div class="site-list-header">
+        <div class="site-list-title">QUEUE</div>
+        <div class="site-count" id="queueCount">0</div>
+      </div>
+      <div id="siteQueue"></div>
+    </div>
+  </aside>
+
+  <div class="content">
+    <div class="frame-grid" id="frameGrid"></div>
+    <div class="log-panel">
+      <div class="log-header">
+        <div class="log-title">▸ ACTIVITY LOG</div>
+        <div class="log-clear" onclick="clearLog()">[ clear ]</div>
+      </div>
+      <div class="log-body" id="logBody"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const NUM_FRAMES = 4;
+let sites = [], running = false, siteIndex = 0, frameIndex = 0;
+let tickTimer = null, elapsedTimer = null;
+let startTime = 0, targetDuration = 0;
+let totalRequests = 0, fetchOkCount = 0, iframeOkCount = 0, elapsedSeconds = 0;
+let trafficMode = 'fetch+iframe';
+
+// ── Mode selector ──────────────────────────────────────────────────
+const modeInfo = {
+  'fetch+iframe': '<b>FETCH + IFRAME</b> — Fires a real HTTP GET via <code>fetch(no-cors)</code> for every site (firewall sees it), and also tries to load it in an iframe. Blocked iframes show a status card; fetch always goes through.',
+  'fetch': '<b>FETCH ONLY</b> — Sends <code>fetch(no-cors)</code> GET requests only. No iframes at all. Works on every site regardless of X-Frame-Options/CSP. Traffic hits your firewall even though the frames show status cards.',
+  'iframe': '<b>IFRAME ONLY</b> — Legacy mode using only iframes. Many sites block iframe embedding. Use FETCH+IFRAME for reliable traffic generation.'
+};
+
+function setMode(m) {
+  trafficMode = m;
+  document.getElementById('modeA').classList.toggle('active', m === 'fetch+iframe');
+  document.getElementById('modeB').classList.toggle('active', m === 'fetch');
+  document.getElementById('modeC').classList.toggle('active', m === 'iframe');
+  document.getElementById('modeInfo').innerHTML = modeInfo[m];
+}
+
+// ── Build frames ───────────────────────────────────────────────────
+function buildFrames() {
+  document.getElementById('frameGrid').innerHTML = Array.from({length: NUM_FRAMES}, (_, i) => `
+    <div class="frame-cell" id="cell${i}">
+      <div class="frame-bar">
+        <span class="frame-id">F${i+1}</span>
+        <span class="frame-url" id="furl${i}">idle</span>
+        <span class="method-badge" id="fbadge${i}"></span>
+        <span class="frame-status" id="fstatus${i}"></span>
+      </div>
+      <iframe id="frame${i}" sandbox="allow-scripts allow-same-origin allow-forms" loading="lazy"></iframe>
+      <div class="status-card hidden" id="scard${i}"></div>
+      <div class="idle-overlay" id="idle${i}">
+        <div class="idle-icon">⬡</div>
+        <div>Frame ${i+1} — awaiting assignment</div>
+      </div>
+    </div>`).join('');
+}
+buildFrames();
+
+// ── fetch() traffic ────────────────────────────────────────────────
+// mode:'no-cors' => browser sends the actual HTTP GET, firewall sees it,
+// JS receives only an opaque response (cannot read it, but doesn't matter).
+async function fireFetch(url, fi) {
+  try {
+    await fetch(url, { method: 'GET', mode: 'no-cors', cache: 'no-store', credentials: 'omit' });
+    fetchOkCount++;
+    document.getElementById('statFetch').textContent = fetchOkCount;
+    log(`[F${fi+1}] ⬡ fetch sent → ${shortUrl(url)}`, 'fetch');
+    return true;
+  } catch(e) {
+    log(`[F${fi+1}] ⬡ fetch error → ${shortUrl(url)}: ${e.message}`, 'warn');
+    return false;
+  }
+}
+
+// ── Status card ────────────────────────────────────────────────────
+function showCard(fi, url, state) {
+  const card = document.getElementById(`scard${fi}`);
+  const domain = getDomain(url);
+  const faviconUrl = getOrigin(url) + '/favicon.ico';
+  const letter = domain.charAt(0).toUpperCase();
+  const badge = state === 'sending'
+    ? `<div class="sc-badge sending"><div class="sc-dot"></div>SENDING…</div>`
+    : `<div class="sc-badge sent"><div class="sc-dot"></div>HTTP REQUEST SENT ✓</div>`;
+  card.innerHTML = `
+    <div class="sc-favicon">
+      <img src="${faviconUrl}" onerror="this.style.display='none';this.nextSibling.style.display='block'">
+      <div class="sc-letter" style="display:none">${letter}</div>
+    </div>
+    <div class="sc-domain">${domain}</div>
+    <div class="sc-url">${url}</div>
+    ${badge}
+    <div class="sc-meta">Frame ${fi+1} &nbsp;·&nbsp; ${new Date().toLocaleTimeString()}</div>`;
+  card.classList.remove('hidden');
+}
+
+function hideCard(fi) { document.getElementById(`scard${fi}`).classList.add('hidden'); }
+
+// ── Assign URL to frame ────────────────────────────────────────────
+function assignToFrame(url, fi) {
+  const iframe   = document.getElementById(`frame${fi}`);
+  const furlEl   = document.getElementById(`furl${fi}`);
+  const fstatEl  = document.getElementById(`fstatus${fi}`);
+  const fbadge   = document.getElementById(`fbadge${fi}`);
+  const idleEl   = document.getElementById(`idle${fi}`);
+  const cell     = document.getElementById(`cell${fi}`);
+
+  furlEl.textContent = shortUrl(url);
+  fstatEl.className  = 'frame-status loading';
+  idleEl.classList.add('hidden');
+  cell.classList.add('active-cell');
+  setTimeout(() => cell.classList.remove('active-cell'), 1200);
+
+  totalRequests++;
+  document.getElementById('statRequests').textContent = totalRequests;
+
+  if (trafficMode === 'fetch') {
+    // Pure fetch — show card, no iframe navigation
+    iframe.src = 'about:blank';
+    fbadge.textContent = 'FETCH'; fbadge.className = 'method-badge fetch';
+    showCard(fi, url, 'sending');
+    fireFetch(url, fi).then(() => {
+      fstatEl.className = 'frame-status ok';
+      showCard(fi, url, 'sent');
+    });
+
+  } else if (trafficMode === 'iframe') {
+    // Legacy iframe only
+    hideCard(fi);
+    fbadge.textContent = 'IFRAME'; fbadge.className = 'method-badge iframe-ok';
+    let loaded = false;
+    iframe.onload = () => {
+      if (loaded) return; loaded = true;
+      fstatEl.className = 'frame-status ok';
+      iframeOkCount++;
+      document.getElementById('statIframe').textContent = iframeOkCount;
+      log(`[F${fi+1}] ⬜ iframe loaded → ${shortUrl(url)}`, 'ok');
+    };
+    iframe.onerror = () => {
+      fstatEl.className = 'frame-status err';
+      fbadge.textContent = 'BLOCKED'; fbadge.className = 'method-badge blocked';
+      log(`[F${fi+1}] ✕ iframe blocked → ${shortUrl(url)}`, 'warn');
+    };
+    iframe.src = url;
+
+  } else {
+    // FETCH + IFRAME (default)
+    // Fire fetch immediately — guaranteed traffic hit
+    fbadge.textContent = 'FETCH+IFRAME'; fbadge.className = 'method-badge fetch';
+    fireFetch(url, fi);
+
+    // Also try iframe for visual
+    hideCard(fi);
+    let iframeResolved = false;
+
+    const resolveIframe = (ok) => {
+      if (iframeResolved) return;
+      iframeResolved = true;
+      if (ok) {
+        fstatEl.className = 'frame-status ok';
+        fbadge.textContent = 'IFRAME'; fbadge.className = 'method-badge iframe-ok';
+        hideCard(fi);
+        iframeOkCount++;
+        document.getElementById('statIframe').textContent = iframeOkCount;
+        log(`[F${fi+1}] ⬜ iframe loaded → ${shortUrl(url)}`, 'ok');
+      } else {
+        fstatEl.className = 'frame-status ok'; // fetch still sent
+        fbadge.textContent = 'FETCH'; fbadge.className = 'method-badge fetch';
+        showCard(fi, url, 'sent');
+        log(`[F${fi+1}] ✕ iframe blocked — fetch confirmed → ${shortUrl(url)}`, 'fetch');
+      }
+    };
+
+    iframe.onload  = () => resolveIframe(true);
+    iframe.onerror = () => resolveIframe(false);
+    // Timeout fallback in case onload fires for a blank/error page
+    setTimeout(() => resolveIframe(false), 5000);
+    iframe.src = url;
+  }
+}
+
+// ── Tick ───────────────────────────────────────────────────────────
+function tick() {
+  if (!running || sites.length === 0) return;
+  if (document.getElementById('shuffleMode').value === 'rand')
+    siteIndex = Math.floor(Math.random() * sites.length);
+
+  const url = sites[siteIndex];
+  const fi  = frameIndex % NUM_FRAMES;
+
+  markQueueItem(siteIndex, fi);
+  log(`[F${fi+1}] → ${url}`, 'info');
+  assignToFrame(url, fi);
+
+  siteIndex   = (siteIndex + 1)   % sites.length;
+  frameIndex  = (frameIndex + 1)  % NUM_FRAMES;
+
+  if (targetDuration > 0 && Date.now() - startTime >= targetDuration) {
+    log('⏱ Run time limit reached. Stopping.', 'warn');
+    stopTraffic();
+  }
+}
+
+// ── Start / Stop ───────────────────────────────────────────────────
+function startTraffic() {
+  parseSites();
+  if (!sites.length) { log('No valid URLs found. Add sites first.', 'err'); return; }
+
+  const sec = Math.max(2, parseInt(document.getElementById('interval').value) || 8);
+  const limited = document.getElementById('limitTime').checked;
+
+  if (limited) {
+    const h = parseInt(document.getElementById('runHours').value)   || 0;
+    const m = parseInt(document.getElementById('runMinutes').value) || 0;
+    targetDuration = (h * 3600 + m * 60) * 1000;
+    if (!targetDuration) { log('Set a valid run duration or uncheck time limit.', 'err'); return; }
+    document.getElementById('progressWrap').style.display = 'block';
+    document.getElementById('progressBar').style.width = '0%';
+  } else {
+    targetDuration = 0;
+    document.getElementById('progressWrap').style.display = 'none';
+  }
+
+  running = true; startTime = Date.now();
+  elapsedSeconds = totalRequests = fetchOkCount = iframeOkCount = frameIndex = 0;
+  ['statRequests','statFetch','statIframe'].forEach(id => document.getElementById(id).textContent = '0');
+
+  setStatus(true);
+  log(`▶ [${trafficMode.toUpperCase()}] ${sites.length} sites · ${sec}s interval${targetDuration ? ' · limit '+fmtDur(targetDuration/1000) : ' · indefinite'}`, 'ok');
+
+  tick();
+  tickTimer    = setInterval(tick, sec * 1000);
+  elapsedTimer = setInterval(() => {
+    elapsedSeconds++;
+    updateTimer();
+    if (targetDuration > 0)
+      document.getElementById('progressBar').style.width = Math.min(100, elapsedSeconds * 1000 / targetDuration * 100) + '%';
+  }, 1000);
+}
+
+function stopTraffic() {
+  running = false;
+  clearInterval(tickTimer); clearInterval(elapsedTimer);
+  setStatus(false);
+  log('■ Stopped.', 'warn');
+  for (let i = 0; i < NUM_FRAMES; i++) document.getElementById(`fstatus${i}`).className = 'frame-status';
+}
+
+function setStatus(on) {
+  document.getElementById('statusPill').className = 'status-pill ' + (on ? 'running' : 'stopped');
+  document.getElementById('statusText').textContent = on ? 'RUNNING' : 'STOPPED';
+  document.getElementById('btnStart').style.display = on ? 'none' : '';
+  document.getElementById('btnStop').style.display  = on ? '' : 'none';
+  document.getElementById('timerDisplay').className = 'timer-display' + (on ? ' running' : '');
+  document.getElementById('timerSub').textContent   = on
+    ? (targetDuration > 0 ? 'REMAINING' : 'ELAPSED')
+    : (elapsedSeconds > 0 ? `STOPPED AFTER ${fmtDur(elapsedSeconds)}` : 'NOT RUNNING');
+}
+
+function updateTimer() {
+  const s = targetDuration > 0 ? Math.max(0, Math.round(targetDuration/1000) - elapsedSeconds) : elapsedSeconds;
+  document.getElementById('timerDisplay').textContent = fmtDur(s);
+  document.getElementById('timerSub').textContent = targetDuration > 0 ? 'REMAINING' : 'ELAPSED';
+}
+
+function fmtDur(s) {
+  s = Math.round(s);
+  return `${Math.floor(s/3600)}:${String(Math.floor(s%3600/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+}
+
+// ── Queue rendering ────────────────────────────────────────────────
+function renderQueue() {
+  document.getElementById('queueCount').textContent = sites.length;
+  document.getElementById('siteQueue').innerHTML = sites.map((url, i) => `
+    <div class="site-item" id="qitem${i}">
+      <div class="site-dot"></div>
+      <div class="site-url" title="${url}">${shortUrl(url)}</div>
+      <div class="site-frame" id="qframe${i}">—</div>
+    </div>`).join('');
+}
+
+function markQueueItem(si, fi) {
+  sites.forEach((_, i) => {
+    document.getElementById(`qitem${i}`)?.classList.remove('active');
+    const fe = document.getElementById(`qframe${i}`);
+    if (fe) fe.textContent = '—';
+  });
+  const el = document.getElementById(`qitem${si}`);
+  const fe = document.getElementById(`qframe${si}`);
+  el?.classList.add('active');
+  el?.scrollIntoView({ block:'nearest' });
+  if (fe) fe.textContent = `F${fi+1}`;
+}
+
+// ── Helpers ────────────────────────────────────────────────────────
+function parseSites() {
+  const raw = document.getElementById('siteList').value;
+  sites = raw.split('\n').map(l => l.trim()).filter(l => /^https?:\/\//.test(l));
+  siteIndex = 0;
+  document.getElementById('statSites').textContent = sites.length;
+  renderQueue();
+  log(sites.length ? `Parsed ${sites.length} sites.` : 'No valid URLs found.', sites.length ? 'ok' : 'warn');
+}
+
+function clearSites() {
+  document.getElementById('siteList').value = '';
+  sites = []; siteIndex = 0;
+  document.getElementById('statSites').textContent = '0';
+  document.getElementById('queueCount').textContent = '0';
+  document.getElementById('siteQueue').innerHTML = '';
+}
+
+function getDomain(url) { try { return new URL(url).hostname.replace(/^www\./,''); } catch { return url; } }
+function getOrigin(url) { try { return new URL(url).origin; } catch { return url; } }
+function shortUrl(url)  { return url.replace(/^https?:\/\/(www\.)?/,'').substring(0,50); }
+
+function log(msg, type='info') {
+  const body = document.getElementById('logBody');
+  const now  = new Date();
+  const ts   = [now.getHours(),now.getMinutes(),now.getSeconds()].map(n=>String(n).padStart(2,'0')).join(':');
+  const row  = document.createElement('div');
+  row.className = 'log-entry';
+  row.innerHTML = `<span class="log-time">${ts}</span><span class="log-msg ${type}">${msg}</span>`;
+  body.appendChild(row);
+  body.scrollTop = body.scrollHeight;
+  while (body.children.length > 400) body.removeChild(body.firstChild);
+}
+function clearLog() { document.getElementById('logBody').innerHTML = ''; }
+
+// ── File import ────────────────────────────────────────────────────
+const dropZone  = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => fileInput.files[0] && readFile(fileInput.files[0]));
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag-over');
+  e.dataTransfer.files[0] && readFile(e.dataTransfer.files[0]);
+});
+function readFile(file) {
+  const r = new FileReader();
+  r.onload = e => { document.getElementById('siteList').value = e.target.result; log(`Loaded: ${file.name}`, 'ok'); parseSites(); };
+  r.readAsText(file);
+}
+
+document.getElementById('limitTime').addEventListener('change', function() {
+  document.getElementById('timeRow').style.display = this.checked ? 'block' : 'none';
+});
+
+log('Ready. Import a site list and press START.', 'info');
+log('Tip: FETCH+IFRAME mode sends real HTTP traffic to every site, even if iframes are blocked.', 'fetch');
+</script>
+</body>
+</html>
